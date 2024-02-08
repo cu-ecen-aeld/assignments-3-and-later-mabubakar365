@@ -1,5 +1,8 @@
 #include "systemcalls.h"
-
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -16,8 +19,21 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    int status = system(cmd);
+    if(status == -1)
+    {
+        return false;
+    }
 
-    return true;
+    else
+    {
+        if(WIFEXITED(status))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -34,6 +50,19 @@ bool do_system(const char *cmd)
 *   by the command issued in @param arguments with the specified arguments.
 */
 
+/**
+* @param count -The numbers of variables passed to the function. The variables are command to execute.
+*   followed by arguments to pass to the command
+*   Since exec() does not perform path expansion, the command to execute needs
+*   to be an absolute path.
+* @param ... - A list of 1 or more arguments after the @param count argument.
+*   The first is always the full path to the command to execute with execv()
+*   The remaining arguments are a list of arguments to pass to the command in execv()
+* @return true if the command @param ... with arguments @param arguments were executed successfully
+*   using the execv() call, false if an error occurred, either in invocation of the
+*   fork, waitpid, or execv() command, or if a non-zero return value was returned
+*   by the command issued in @param arguments with the specified arguments.
+*/
 bool do_exec(int count, ...)
 {
     va_list args;
@@ -47,7 +76,7 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    // command[count] = command[count];
 
 /*
  * TODO:
@@ -58,10 +87,45 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    int status;
+    pid_t pid;
+
+    pid = fork();
+    // printf("PID: %d\n", pid);
+    if(pid == -1) return false;
+
+    else if (pid == 0)
+    {    
+        execv(command[0], command);
+        exit(-1);
+    }
+
+    if(waitpid(pid, &status, 0) == -1)
+    {
+        return false;
+    }
 
     va_end(args);
+    
+    if(WIFEXITED(status))
+    {
+        if(WEXITSTATUS(status) == 0)
+        {
+            return true; 
+        }
 
-    return true;
+        else
+        {
+            return false;
+        }
+    }
+
+    else
+    {
+        return false;
+    }
+
+    // return WIFEXITED(status) && (WEXITSTATUS(status) == 0);
 }
 
 /**
@@ -82,9 +146,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
-
-
+    // command[count] = command[count];
 /*
  * TODO
  *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
@@ -92,8 +154,52 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int status;
+    pid_t pid;
+
+    int fd;
+    fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    if(fd < 0) return false;
+
+    pid = fork();
+    if(pid == -1) return false;
+    else if(pid == 0)
+    {
+        if(dup2(fd, 1) < 0) 
+        {
+            close(fd);
+            return false;
+        }
+        else
+        {
+            execv(command[0], command);
+            exit(-1);
+        }
+    }
+
+    if(waitpid(pid, &status, 0) == -1)
+    {
+        return false;
+    }
+
+    if(WIFEXITED(status))
+    {
+        if(WEXITSTATUS(status) == 0)
+        {
+            return true; 
+        }
+
+        else
+        {
+            return false;
+        }
+    }
+
+    else
+    {
+        return false;
+    }
 
     va_end(args);
 
-    return true;
 }
