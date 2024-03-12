@@ -1,3 +1,4 @@
+all: CROSS_COMPILE
 deafult:
 	@gcc writer.c -o writer
 	@file writer
