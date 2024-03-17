@@ -39,7 +39,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     # TODO: Add your kernel build steps here
     make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE mrproper
     make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE defconfig
-    make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE clean
+    # make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE clean -- today
     sed -i 's/YYLTYPE yylloc;/extern &/' ./scripts/dtc/dtc-lexer.l
     make -j4 ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE all
     make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE modules
@@ -62,6 +62,7 @@ sudo mkdir rootfs
 sudo mkdir -p rootfs/bin rootfs/dev rootfs/etc rootfs/home rootfs/lib rootfs/lib64 rootfs/proc rootfs/sbin rootfs/sys rootfs/tmp rootfs/usr rootfs/var
 sudo mkdir -p rootfs/usr/bin rootfs/usr/lib rootfs/usr/sbin
 sudo mkdir -p rootfs/var/log
+
 CURRENT_USER=$(whoami)
 CURRENT_GROUP=$(id -gn)
 sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "${OUTDIR}/rootfs"
@@ -86,7 +87,7 @@ sudo make distclean
 sudo make defconfig
 # make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE defconfig
 make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
-sed -i 's/CONFIG_EXTRA_CFLAGS=""/CONFIG_EXTRA_CFLAGS="-static"/g' .config   
+# sed -i 's/CONFIG_EXTRA_CFLAGS=""/CONFIG_EXTRA_CFLAGS="-static"/g' .config   -- today
 # sudo make -j4 CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=arm64 CROSS_COMPILE=${CROSS_COMPILE} install
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
@@ -101,7 +102,15 @@ echo "Library dependencies"
 echo "After checking library dependencies"
 
 # TODO: Add library dependencies to rootfs
-
+SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
+INTERPRETER=$(find $SYSROOT -name "ld-linux-aarch64.so.1")
+cp ${INTERPRETER} ${OUTDIR}/rootfs/lib
+SHARED_LIB_1=$(find $SYSROOT -name "libm.so.6")
+cp ${SHARED_LIB_1} ${OUTDIR}/rootfs/lib64
+SHARED_LIB_2=$(find $SYSROOT -name "libresolv.so.2")
+cp ${SHARED_LIB_2} ${OUTDIR}/rootfs/lib64
+SHARED_LIB_3=$(find $SYSROOT -name "libc.so.6")
+cp ${SHARED_LIB_3} ${OUTDIR}/rootfs/lib64
 # TODO: Make device nodes
 sudo mknod -m 666 dev/null c 1 3
 sudo mknod -m 600 dev/console c 5 1
@@ -120,6 +129,7 @@ cd ${OUTDIR}/rootfs/home
 sed -i 's|cat ../conf/assignment.txt|cat conf/assignment.txt|' finder-test.sh
 sudo chmod +x finder-test.sh
 sudo chmod +x writer.sh
+sudo chmod +x writer
 # TODO: Chown the root directory
 cd ${OUTDIR}/rootfs
 sudo chown -R root:root *
