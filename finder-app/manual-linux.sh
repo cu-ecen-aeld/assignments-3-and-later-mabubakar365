@@ -40,7 +40,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE mrproper
     make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE defconfig
     # make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE clean -- today
-    sed -i 's/YYLTYPE yylloc;/extern &/' ./scripts/dtc/dtc-lexer.l
+    # sed -i 's/YYLTYPE yylloc;/extern &/' ./scripts/dtc/dtc-lexer.l
     make -j4 ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE all
     make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE modules
     make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE dtbs
@@ -105,12 +105,16 @@ echo "After checking library dependencies"
 SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
 INTERPRETER=$(find $SYSROOT -name "ld-linux-aarch64.so.1")
 cp ${INTERPRETER} ${OUTDIR}/rootfs/lib
+cp ${INTERPRETER} ${OUTDIR}/rootfs/home
 SHARED_LIB_1=$(find $SYSROOT -name "libm.so.6")
 cp ${SHARED_LIB_1} ${OUTDIR}/rootfs/lib64
+cp ${SHARED_LIB_1} ${OUTDIR}/rootfs/home
 SHARED_LIB_2=$(find $SYSROOT -name "libresolv.so.2")
 cp ${SHARED_LIB_2} ${OUTDIR}/rootfs/lib64
+cp ${SHARED_LIB_2} ${OUTDIR}/rootfs/home
 SHARED_LIB_3=$(find $SYSROOT -name "libc.so.6")
 cp ${SHARED_LIB_3} ${OUTDIR}/rootfs/lib64
+cp ${SHARED_LIB_3} ${OUTDIR}/rootfs/home
 # TODO: Make device nodes
 sudo mknod -m 666 dev/null c 1 3
 sudo mknod -m 600 dev/console c 5 1
