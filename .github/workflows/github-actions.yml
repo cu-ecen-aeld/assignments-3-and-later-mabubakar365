@@ -16,8 +16,13 @@ jobs:
           - name: Run unit test
             run: ./unit-test.sh
     full-test:
+<<<<<<< HEAD
         container: cuaesd/aesd-autotest:assignment3
         runs-on: ubuntu-latest
+=======
+        container: cuaesd/aesd-autotest:assignment5
+        runs-on: self-hosted
+>>>>>>> assignments-base/assignment5
         steps:
           - uses: actions/checkout@v2
           - name: Checkout submodules
