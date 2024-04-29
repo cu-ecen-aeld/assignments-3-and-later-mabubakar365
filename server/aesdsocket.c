@@ -8,14 +8,54 @@
 #include<stdlib.h>
 #include<signal.h>
 
+int sockfd;
+int client_sockfd;
+
 void SIGINTHandler(int signo)
 {
+    if(signo == SIGINT)
+    {
+        int Status;
 
+        Status = remove("/var/tmp/aesdsocketdata");
+        if(Status == 0)
+        {
+            printf("Sucesfully deleted file /var/tmp/aesdsocket\n");
+        }
+
+        else
+        {
+            printf("Unable to delete file at path /var/tmp/aesdsocket\n");
+        }
+
+        close(sockfd);
+        printf("Gracefully handling SIGINT\n");
+        syslog(LOG_INFO,  "Caught signal, exiting");
+        exit(EXIT_SUCCESS);
+    }
 }
 
 void SIGTERMHandler(int signo)
 {
+    if(signo == SIGTERM)
+    {
+        int Status;
 
+        Status = remove("/var/tmp/aesdsocketdata");
+        if(Status == 0)
+        {
+            printf("Sucesfully deleted file /var/tmp/aesdsocket\n");
+        }
+
+        else
+        {
+            printf("Unable to delete file at path /var/tmp/aesdsocket\n");
+        }
+        close(sockfd);
+        printf("Gracefully handling SIGTERM\n");
+        syslog(LOG_INFO,  "Caught signal, exiting");
+        exit(EXIT_SUCCESS);
+    }
 }
 
 int createTCPServer()
@@ -34,7 +74,7 @@ int createTCPServer()
 
     openlog("aesdsocket.c", LOG_CONS | LOG_PID, LOG_USER);
 
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd == -1)
     {
         syslog(LOG_ERR, "Unable to create TCP Socket");
@@ -69,7 +109,7 @@ int createTCPServer()
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
 
-        int client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
+        client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
         if(client_sockfd == -1)
         {
             syslog(LOG_ERR, "Unable to accept the client's connection");
