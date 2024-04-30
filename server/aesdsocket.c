@@ -30,6 +30,8 @@ void signalInterruptHandler(int signo)
         {
             printf("Unable to delete file at path /var/tmp/aesdsocket\n");
         }
+
+        close(client_sockfd);
         close(sockfd);
         printf("Gracefully handling SIGTERM\n");
         syslog(LOG_INFO,  "Caught signal, exiting");
@@ -41,14 +43,12 @@ void signalInterruptHandler(int signo)
 
 int createTCPServer()
 {
-    char *data;
-
     signal(SIGINT, signalInterruptHandler);
     signal(SIGTERM, signalInterruptHandler);
 
     const char *filepath = "/var/tmp/aesdsocketdata";
 
-    file = fopen(filepath, "a");
+    file = fopen(filepath, "a+");
     if(file == NULL)
     {
         perror("Unable to open or create the file");
@@ -127,46 +127,50 @@ int createTCPServer()
 
         syslog(LOG_INFO, "Accepted connection from %s", client_ip);
 
-        do
+        while(1)
         {
-            char buffer[1024];
+            char buffer[1024 * 12];
             int bytes_received = recv(client_sockfd, buffer, sizeof(buffer), 0);
-            if(bytes_received <= 0)
+            if(bytes_received < 0)
             {
                 syslog(LOG_ERR, "Received error");
                 perror("Received error\n");
+
+                close(client_sockfd);
+                close(sockfd);
+                fclose(file);
+                closelog();
+
+                return -1;
+            }
+
+            else if(bytes_received == 0)
+            {
+                syslog(LOG_INFO, "Closed connection from %s", client_ip);
+                printf("Closed connection from %s", client_ip);
+                close(client_sockfd);
                 break;
             }
 
-
-            data = strchr(buffer, '\n');
-
-            buffer[bytes_received] = '\0';
-            printf("%s\n", buffer);
-
-            if(data != NULL)
+            else
             {
-                data = '\0';
+                buffer[bytes_received] = '\0';
+                printf("%s\n", buffer);
+                syslog(LOG_INFO, "%s", buffer);
+
                 fputs(buffer, file);
-                fputs("\n", file);
                 fflush(file);
                 fseek(file, 0, SEEK_SET);
-                syslog(LOG_INFO, "%s", data);
-                printf("%s\n", data);
 
-                while((bytes_received = fread(buffer, 1, sizeof(buffer), file)) > 0)
+                char readBuf[1024 * 12];
+                while(fgets(readBuf, sizeof(readBuf), file) != NULL)
                 {
-                    send(client_sockfd, buffer, bytes_received, 0);
+                    send(client_sockfd, readBuf, strlen(readBuf), 0);
                 }
-
-                // break;
             }
-        } while (1);
-    
-        close(client_sockfd);
-        syslog(LOG_INFO, "Closed connection from %s", client_ip);
+        }
     }
-
+    
     return 0;
 }
 
