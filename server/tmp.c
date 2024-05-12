@@ -72,7 +72,7 @@ int createTCPServer()
         syslog(LOG_ERR, "setsockopt(SO_REUSEADDR) failed");
         perror("setsockopt(SO_REUSEADDR) failed");
     }
-
+    
     struct sockaddr_in addr;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_family = AF_INET;
@@ -99,6 +99,7 @@ int createTCPServer()
     {
         static int complete_packet_length = 0;
         bool isCompletePacketReceived = 0;
+        static int current_buffer_size = 1024;
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
 
@@ -138,13 +139,26 @@ int createTCPServer()
         syslog(LOG_INFO, "Accepted connection from %s", client_ip);
 
         char *buffer = malloc(1024 * sizeof(char));
-        while(1)
+        if(buffer == NULL)
         {
-            
-            int bytes_received = recv(client_sockfd, buffer, sizeof(buffer), 0);
+            printf("Unable to allocate memory on heap\n");
+            close(client_sockfd);
+            close(sockfd);
+            fclose(file);
+            closelog();
+            return -1;
+        }
+
+        while(1)
+        {   
+            char tmpbuf[1024];
+            int bytes_received = recv(client_sockfd, tmpbuf, sizeof(tmpbuf), 0);
             printf("Bytes received %d\n", bytes_received);
+            complete_packet_length += bytes_received;
+            
             if(bytes_received == 0)
             {
+                free(buffer);
                 syslog(LOG_INFO, "Closed connection from %s", client_ip);
                 printf("Closed connection from %s\n", client_ip);
                 close(client_sockfd);
@@ -153,6 +167,7 @@ int createTCPServer()
 
             else if(bytes_received < 0)
             {
+                free(buffer);
                 syslog(LOG_ERR, "Received error");
                 perror("Received error\n");
 
@@ -166,18 +181,60 @@ int createTCPServer()
 
             else
             {
-                buffer[bytes_received] = '\0';
-                printf("%s\n", buffer);
-                syslog(LOG_INFO, "%s", buffer);
-
-                fputs(buffer, file);
-                fflush(file);
-                fseek(file, 0, SEEK_SET);
-
-                char readBuf[1024 * 12];
-                while(fgets(readBuf, sizeof(readBuf), file) != NULL)
+                if(complete_packet_length > current_buffer_size)
                 {
-                    send(client_sockfd, readBuf, strlen(readBuf), 0);
+                    buffer = realloc(buffer, complete_packet_length-current_buffer_size);
+                    if(buffer == NULL)
+                    {
+                        printf("Unable to allocate memory on heap\n");
+                        free(buffer);
+                        close(client_sockfd);
+                        close(sockfd);
+                        fclose(file);
+                        closelog();
+                        return -1;
+                    }
+                    else
+                    {
+                        current_buffer_size = complete_packet_length;
+                    }
+                }
+
+                if(strchr(tmpbuf, '\n'))
+                {
+                    memcpy(buffer, tmpbuf, bytes_received);
+                    buffer[bytes_received] = '\0';
+                    printf("%s\n", buffer);
+                    syslog(LOG_INFO, "%s", buffer);
+
+                    fputs(buffer, file);
+                    fflush(file);
+                    fseek(file, 0, SEEK_SET);
+
+                    char *writeBuf = malloc(sizeof(char) * complete_packet_length);
+                    if(writeBuf == NULL)
+                    {
+                        printf("Unable to allocate memory on heap\n");
+                        free(buffer);
+                        close(client_sockfd);
+                        close(sockfd);
+                        fclose(file);
+                        closelog();
+                        return -1;
+                    }
+
+                    while(fgets(writeBuf, sizeof(writeBuf), file) != NULL)
+                    {
+                        send(client_sockfd, writeBuf, strlen(writeBuf), 0);
+                    }
+
+                    free(writeBuf);
+                }
+
+                else
+                {
+                    memcpy(buffer, tmpbuf, bytes_received);
+                    buffer[bytes_received] = '\0';
                 }
             }
         }

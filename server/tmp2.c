@@ -44,10 +44,13 @@ void signalInterruptHandler(int signo)
 
 int createTCPServer()
 {
+    char *buffer = NULL;
+
     signal(SIGINT, signalInterruptHandler);
     signal(SIGTERM, signalInterruptHandler);
 
     const char *filepath = "/var/tmp/aesdsocketdata";
+    ssize_t num_bytes; 
 
     file = fopen(filepath, "a+");
     if(file == NULL)
@@ -97,8 +100,6 @@ int createTCPServer()
 
     while(1)
     {
-        static int complete_packet_length = 0;
-        bool isCompletePacketReceived = 0;
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
 
@@ -135,57 +136,79 @@ int createTCPServer()
             return -1;
         }
 
+        printf("Accepted connection from %s\n", client_ip);
         syslog(LOG_INFO, "Accepted connection from %s", client_ip);
 
-        char *buffer = malloc(1024 * sizeof(char));
+        buffer = NULL;
+        num_bytes = 0;
+
         while(1)
         {
-            
-            int bytes_received = recv(client_sockfd, buffer, sizeof(buffer), 0);
-            printf("Bytes received %d\n", bytes_received);
-            if(bytes_received == 0)
+            int connection_closed = 0;
+            int received_error = 0;
+
+            do {
+                buffer = realloc(buffer, num_bytes + 1024);
+                if (!buffer) {
+                    syslog(LOG_INFO, "Unable to allocate space on heap");
+                    printf("Unable to allocate space on heap\n");
+                    return -1;
+                }
+
+                ssize_t recv_bytes = recv(client_sockfd, buffer + num_bytes, 1024, 0);
+
+                if(recv_bytes == 0)
+                {
+                    syslog(LOG_INFO, "Closed connection from %s", client_ip);
+                    printf("Closed connection from %s\n", client_ip);
+                    connection_closed = 1;
+                    break;
+                }
+
+                else if(recv_bytes < 0)
+                {
+                    syslog(LOG_ERR, "Received error");
+                    perror("Received error\n");
+                    received_error = 1;
+                    break;
+                }
+
+                num_bytes += recv_bytes;
+            } while (!strchr(buffer, '\n'));   
+
+            if(received_error == 1 || connection_closed == 1) 
             {
-                syslog(LOG_INFO, "Closed connection from %s", client_ip);
-                printf("Closed connection from %s\n", client_ip);
-                close(client_sockfd);
+                free(buffer);
                 break;
-            }
-
-            else if(bytes_received < 0)
-            {
-                syslog(LOG_ERR, "Received error");
-                perror("Received error\n");
-
-                close(client_sockfd);
-                close(sockfd);
-                fclose(file);
-                closelog();
-
-                return -1;
             }
 
             else
             {
-                buffer[bytes_received] = '\0';
-                printf("%s\n", buffer);
-                syslog(LOG_INFO, "%s", buffer);
+                buffer[num_bytes] = '\0';
+
+                printf("Packet Received %s\n", buffer);
 
                 fputs(buffer, file);
                 fflush(file);
                 fseek(file, 0, SEEK_SET);
 
-                char readBuf[1024 * 12];
-                while(fgets(readBuf, sizeof(readBuf), file) != NULL)
-                {
-                    send(client_sockfd, readBuf, strlen(readBuf), 0);
-                }
-            }
-        }
-    }
-    
-    return 0;
-}
+                char writeBuf[1024] = {0};
 
+                while(fgets(writeBuf, sizeof(writeBuf), file) != NULL)
+                {
+                    send(client_sockfd, writeBuf, sizeof(writeBuf), 0);
+                }
+
+                free(buffer);
+            }
+
+        }
+
+        syslog(LOG_INFO, "Closed connection from %s", client_ip);
+        close(client_sockfd);            
+    }               
+    return 0; 
+}
 
 int main(void)
 {
