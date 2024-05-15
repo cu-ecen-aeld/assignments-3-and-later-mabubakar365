@@ -8,12 +8,14 @@
 #include<stdlib.h>
 #include<signal.h>
 #include<stdbool.h>
+#include<sys/stat.h>
 
 int sockfd;
 int client_sockfd;
 FILE *file;
 
 void signalInterruptHandler(int signo);
+int createTCPServer(int deamonize);
 
 void signalInterruptHandler(int signo)
 {
@@ -42,7 +44,7 @@ void signalInterruptHandler(int signo)
     }
 }
 
-int createTCPServer()
+int createTCPServer(int deamonize)
 {
     char *buffer = NULL;
 
@@ -101,6 +103,50 @@ int createTCPServer()
         fclose(file);
         closelog();        
         return -1;
+    }
+
+    if(deamonize == 1)
+    {
+            pid_t pid = fork();
+
+            if(pid < 0)
+            {
+                printf("failed to fork\n"); 
+                close(sockfd);
+                fclose(file);
+                closelog();  
+                exit(EXIT_FAILURE);      
+            }   
+
+            if(pid > 0 )
+            {
+                printf("Running as a deamon\n");
+                exit(EXIT_SUCCESS);
+            }
+
+            umask(0);
+
+            if(setsid() < 0)
+            {
+                printf("Failed to create SID for child\n");
+                close(sockfd);
+                fclose(file);
+                closelog(); 
+                exit(EXIT_FAILURE);
+            }
+
+            if(chdir("/") < 0)
+            {
+                printf("Unable to change directory to root\n");
+                close(sockfd);
+                fclose(file);
+                closelog(); 
+                exit(EXIT_FAILURE);
+            }
+
+            close(STDIN_FILENO);
+            close(STDOUT_FILENO);
+            close(STDERR_FILENO);        
     }
 
     syslog(LOG_INFO, "TCP server listening at port %d", ntohs(addr.sin_port));
@@ -234,6 +280,8 @@ int createTCPServer()
         }
 
         syslog(LOG_INFO, "Closed connection from %s", client_ip);
+        // if (remove(filepath) == 0) printf("Deleted successfully\n");
+        // else printf("Unable to delete the file\n");
         close(client_sockfd);            
     }
     close(sockfd);
@@ -242,9 +290,19 @@ int createTCPServer()
     return 0; 
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
-    if(createTCPServer() == -1) printf("Error in running application\n");
+    int deamonize = 0;
+
+    for(int i = 1; i < argc; i++)
+    {
+        if(strcmp(argv[1], "-d") == 0)
+        {
+            deamonize = 1;
+        }
+    }
+
+    if(createTCPServer(deamonize) == -1) printf("Error in running application\n");
     
     return 0;
 }

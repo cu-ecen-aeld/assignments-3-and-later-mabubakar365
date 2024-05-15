@@ -234,8 +234,6 @@ int createTCPServer()
         }
 
         syslog(LOG_INFO, "Closed connection from %s", client_ip);
-        if (remove(filepath) == 0) printf("Deleted successfully\n");
-        else printf("Unable to delete the file\n");
         close(client_sockfd);            
     }
     close(sockfd);
