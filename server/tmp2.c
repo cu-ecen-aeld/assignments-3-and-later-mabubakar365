@@ -17,7 +17,7 @@ void signalInterruptHandler(int signo);
 
 void signalInterruptHandler(int signo)
 {
-    if((signo == SIGTERM) || (signo = SIGINT))
+    if((signo == SIGTERM) || (signo == SIGINT))
     {
         int Status;
 
@@ -33,9 +33,9 @@ void signalInterruptHandler(int signo)
         }
 
         close(client_sockfd);
-        close(sockfd);
         printf("Gracefully handling SIGTERM\n");
         syslog(LOG_INFO,  "Caught signal, exiting");
+        close(sockfd);
         fclose(file);
         closelog();
         exit(EXIT_SUCCESS);
@@ -66,6 +66,8 @@ int createTCPServer()
     {
         syslog(LOG_ERR, "Unable to create TCP Socket");
         perror("Unable to create TCP Socket\n");
+        fclose(file);
+        closelog();
         return -1;
     }
 
@@ -85,6 +87,9 @@ int createTCPServer()
     {
         syslog(LOG_ERR, "TCP Socket bind failure");
         perror("TCP Socket bind failure\n");
+        close(sockfd);
+        fclose(file);
+        closelog();        
         return -1;
     }
 
@@ -92,6 +97,9 @@ int createTCPServer()
     {
         syslog(LOG_ERR, "Unable to listen at created TCP socket");
         perror("Unable to listen at created TCP socket\n");
+        close(sockfd);
+        fclose(file);
+        closelog();        
         return -1;
     }
 
@@ -108,6 +116,9 @@ int createTCPServer()
         {
             syslog(LOG_ERR, "Unable to accept the client's connection");
             perror("Unable to accept the client's connection\n");
+            close(sockfd);
+            fclose(file);
+            closelog();            
             return -1;
         }  
 
@@ -133,6 +144,9 @@ int createTCPServer()
         else
         {
             perror("Unable to get client IP address");
+            close(sockfd);
+            fclose(file);
+            closelog();
             return -1;
         }
 
@@ -152,6 +166,9 @@ int createTCPServer()
                 if (!buffer) {
                     syslog(LOG_INFO, "Unable to allocate space on heap");
                     printf("Unable to allocate space on heap\n");
+                    close(sockfd);
+                    fclose(file);
+                    closelog();
                     return -1;
                 }
 
@@ -179,6 +196,8 @@ int createTCPServer()
             if(received_error == 1 || connection_closed == 1) 
             {
                 free(buffer);
+                buffer = NULL;
+                num_bytes = 0;  // Reset num_bytes to 0
                 break;
             }
 
@@ -192,27 +211,42 @@ int createTCPServer()
                 fflush(file);
                 fseek(file, 0, SEEK_SET);
 
-                char writeBuf[1024] = {0};
-
-                while(fgets(writeBuf, sizeof(writeBuf), file) != NULL)
-                {
-                    send(client_sockfd, writeBuf, sizeof(writeBuf), 0);
+                size_t bufferSize = 1024; // or any other size you want
+                char* writeBuf = malloc(bufferSize * sizeof(char));
+                if(writeBuf == NULL) {
+                    perror("Unable to allocate memory for writeBuf");
+                    return -1;
                 }
 
+                while(fgets(writeBuf, bufferSize, file) != NULL)
+                {
+                    send(client_sockfd, writeBuf, strlen(writeBuf), 0);
+                }
+
+                free(writeBuf); // don't forget to free the memory when you're done with it
+                                
+
                 free(buffer);
+                buffer = NULL;
+                num_bytes = 0;  // Reset num_bytes to 0
             }
 
         }
 
         syslog(LOG_INFO, "Closed connection from %s", client_ip);
+        if (remove(filepath) == 0) printf("Deleted successfully\n");
+        else printf("Unable to delete the file\n");
         close(client_sockfd);            
-    }               
+    }
+    close(sockfd);
+    fclose(file);
+    closelog();               
     return 0; 
 }
 
 int main(void)
 {
-    createTCPServer();
+    if(createTCPServer() == -1) printf("Error in running application\n");
     
     return 0;
 }

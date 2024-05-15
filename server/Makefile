@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -Wall
 
 # Source Files
-SRCS = tmp2.c
+SRCS = aesdsocket.c
 
 # Target Executable
 TARGET = firmware
