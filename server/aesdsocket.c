@@ -150,7 +150,7 @@ int createTCPServer(int deamonize)
     }
 
     syslog(LOG_INFO, "TCP server listening at port %d", ntohs(addr.sin_port));
-    printf("TCP server listening at port %d\n", ntohs(addr.sin_port));
+    //printf("TCP server listening at port %d\n", ntohs(addr.sin_port));
 
     while(1)
     {
@@ -184,7 +184,7 @@ int createTCPServer(int deamonize)
                 inet_ntop(AF_INET6, &(ipv6->sin6_addr), client_ip, INET6_ADDRSTRLEN);
             }
             
-            printf("Client IP Address: %s\n", client_ip);
+            // printf("Client IP Address: %s\n", client_ip);
         }
 
         else
@@ -196,11 +196,12 @@ int createTCPServer(int deamonize)
             return -1;
         }
 
-        printf("Accepted connection from %s\n", client_ip);
+        // printf("Accepted connection from %s\n", client_ip);
         syslog(LOG_INFO, "Accepted connection from %s", client_ip);
 
         buffer = NULL;
         num_bytes = 0;
+        ssize_t recv_bytes = 0;
 
         while(1)
         {
@@ -218,12 +219,12 @@ int createTCPServer(int deamonize)
                     return -1;
                 }
 
-                ssize_t recv_bytes = recv(client_sockfd, buffer + num_bytes, 1024, 0);
+                recv_bytes = recv(client_sockfd, buffer + num_bytes, 1024, 0);
 
                 if(recv_bytes == 0)
                 {
                     syslog(LOG_INFO, "Closed connection from %s", client_ip);
-                    printf("Closed connection from %s\n", client_ip);
+                    // printf("Closed connection from %s\n", client_ip);
                     connection_closed = 1;
                     break;
                 }
@@ -237,7 +238,8 @@ int createTCPServer(int deamonize)
                 }
 
                 num_bytes += recv_bytes;
-            } while (!strchr(buffer, '\n'));   
+            } while (!memchr(buffer + num_bytes - recv_bytes, '\n', recv_bytes));
+            // while (!strchr(buffer, '\n'));   
 
             if(received_error == 1 || connection_closed == 1) 
             {
@@ -251,7 +253,8 @@ int createTCPServer(int deamonize)
             {
                 buffer[num_bytes] = '\0';
 
-                printf("Packet Received %s\n", buffer);
+                // printf("Packet Received %s\n", buffer);
+                // printf("%s", buffer);
 
                 fputs(buffer, file);
                 fflush(file);

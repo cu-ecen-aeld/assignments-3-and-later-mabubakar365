@@ -1,12 +1,12 @@
 # Compiler and Flags
 CC = gcc
-CFLAGS = -Wall
+CFLAGS = -Wall -Werror
 
 # Source Files
 SRCS = aesdsocket.c
 
 # Target Executable
-TARGET = firmware
+TARGET = aesdsocket
 
 # Rule to build target
 $(TARGET) : $(SRCS)
