@@ -1,6 +1,6 @@
 # Compiler and Flags
 CC = gcc
-CFLAGS = -Wall -Werror
+CFLAGS = -Wall -Werror -g -O0
 
 # Source Files
 SRCS = aesdsocket.c
