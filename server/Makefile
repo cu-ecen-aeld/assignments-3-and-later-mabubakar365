@@ -1,6 +1,29 @@
-# Compiler and Flags
+# Default Compiler
 CC = gcc
+# Compiler flags
 CFLAGS = -Wall -Werror -g -O0
+
+# Object files
+OBJ=aesdsocket.o
+
+# Check if CROSS_COMPILE is set
+ifdef CROSS_COMPILE
+	CC=$(CROSS_COMPILE)gcc
+endif
+
+# Default target
+all: aesdsocket
+
+writer: $(OBJ)
+	$(CC) -o $@ $^ $(CFLAGS)
+
+# Pattern rule for object files
+%.o: %.c
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+# Clean target
+clean:
+	rm -f $(OBJ) aesdsocket
 
 # Source Files
 SRCS = aesdsocket.c
@@ -8,20 +31,4 @@ SRCS = aesdsocket.c
 # Target Executable
 TARGET = aesdsocket
 
-# Check if CROSS_COMPILE is set
-ifdef CROSS_COMPILE
-	CC=$(CROSS_COMPILE)gcc
-endif
-
-# Rule to build target
-$(TARGET) : $(SRCS)
-	$(CC) $(CFLAGS) -o $@ $^
-
-# Clean Rule
-clean:
-	rm -f $(TARGET)
-
-.DEFAULT_GOAL := all	
-
-# Default Rule
-all: $(TARGET)
+.PHONY: all clean
