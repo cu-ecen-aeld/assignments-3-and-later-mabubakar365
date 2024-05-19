@@ -8,6 +8,11 @@ SRCS = aesdsocket.c
 # Target Executable
 TARGET = aesdsocket
 
+# Check if CROSS_COMPILE is set
+ifdef CROSS_COMPILE
+	CC=$(CROSS_COMPILE)gcc
+endif
+
 # Rule to build target
 $(TARGET) : $(SRCS)
 	$(CC) $(CFLAGS) -o $@ $^
