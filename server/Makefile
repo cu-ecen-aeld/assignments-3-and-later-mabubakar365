@@ -1,7 +1,7 @@
 # Default Compiler
 CC = gcc
 # Compiler flags
-CFLAGS = -Wall -Werror -g -O0
+CFLAGS = -Wall -Werror -g -O0 -lpthread
 
 # Object files
 OBJ=aesdsocket.o
