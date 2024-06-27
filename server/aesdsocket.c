@@ -13,8 +13,6 @@
 #include<time.h>
 #include<sys/time.h>
 
-#define MAX_THREADS 100
-
 int sockfd;
 FILE *file;
 
@@ -23,6 +21,11 @@ pthread_mutex_t file_mutex;
 void *handle_client(void *ptr);
 void signalInterruptHandler(int signo);
 int createTCPServer(int deamonize);
+
+typedef struct node {
+    pthread_t tid;
+    struct node *next;
+} Node;
 
 typedef struct {
     int client_sockfd;
@@ -324,8 +327,8 @@ int createTCPServer(int deamonize)
     syslog(LOG_INFO, "TCP server listening at port %d", ntohs(addr.sin_port));
     //printf("TCP server listening at port %d\n", ntohs(addr.sin_port));
 
-    pthread_t threads[MAX_THREADS];
     int num_threads = 0;
+    Node *head = NULL;
     
     while(1)
     {
@@ -355,7 +358,17 @@ int createTCPServer(int deamonize)
         client_info->client_sockfd = client_sockfd;
         client_info->client_addr = client_addr;
 
-        if(pthread_create(&threads[num_threads], NULL, handle_client, (void *) client_info) != 0)
+        Node *n = malloc(sizeof(Node)); 
+        if(n == NULL)
+        {
+            syslog(LOG_ERR, "Failed to allocate memory for thread");
+            perror("Failed to allocate memory for thread\n");
+            close(client_sockfd);
+            free(client_info);
+            continue;
+        }
+
+        if(pthread_create(&(n->tid), NULL, handle_client, (void *) client_info) != 0)
         {
             syslog(LOG_ERR, "Unable to create thread");
             perror("Unable to create thread");
@@ -364,14 +377,29 @@ int createTCPServer(int deamonize)
             continue;
         }
 
+        n->next = head;
+        head = n;
+
         num_threads++;
     }
 
-    for(int i = 0; i < num_threads; i++)
+    Node *current = head;
+    Node *next;
+
+    while(current != NULL)
     {
-        if (pthread_join(threads[i], NULL) != 0) {
-            printf("Failed to join thread %d\n", i);
+        if (pthread_join(current->tid, NULL) != 0) {
+            printf("Failed to join thread \n");
         }
+        current = current->next;
+    }
+
+    current = head;
+    while(current != NULL)
+    {
+        next = current->next;
+        free(current);
+        current = next;
     }
 
     close(sockfd);
