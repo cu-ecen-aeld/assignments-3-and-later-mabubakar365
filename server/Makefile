@@ -1,8 +1,9 @@
 # Default Compiler
 CC = gcc
 # Compiler flags
-CFLAGS = -Wall -Werror -g -O0 -lpthread
-
+CFLAGS = -Wall -Werror -g -O0
+# Linker flags
+LDFLAGS = -lpthread
 # Object files
 OBJ=aesdsocket.o
 
@@ -14,8 +15,8 @@ endif
 # Default target
 all: aesdsocket
 
-writer: $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS)
+aesdsocket: $(OBJ)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 # Pattern rule for object files
 %.o: %.c
