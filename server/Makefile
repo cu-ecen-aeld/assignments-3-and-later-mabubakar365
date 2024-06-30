@@ -1,9 +1,9 @@
 # Default Compiler
-CC = gcc
+CC ?= $(CROSS_COMPILE)gcc
 # Compiler flags
-CFLAGS = -Wall -Werror -g -O0
+CFLAGS ?= -Wall -Werror -g -O0
 # Linker flags
-LDFLAGS = -lpthread
+LDFLAGS ?= -lpthread -lrt
 # Object files
 OBJ=aesdsocket.o
 
@@ -30,6 +30,6 @@ clean:
 SRCS = aesdsocket.c
 
 # Target Executable
-TARGET = aesdsocket
+TARGET ?= aesdsocket
 
 .PHONY: all clean
