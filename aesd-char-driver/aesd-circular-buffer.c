@@ -47,7 +47,21 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     /**
     * TODO: implement per description
     */
+   if(buffer->full)
+   {
+        buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+   }
+
+   buffer->entry[buffer->in_offs] = *add_entry;
+
+   buffer->in_offs = (buffer->in_offs+1)%AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+
+   if(buffer->in_offs == buffer->out_offs)
+   {
+        buffer->full = 1;
+   }
 }
+
 
 /**
 * Initializes the circular buffer described by @param buffer to an empty struct
