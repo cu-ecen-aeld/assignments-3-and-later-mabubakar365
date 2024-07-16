@@ -64,5 +64,5 @@ Code: d2800001 d2800000 d503233f d50323bf (b900003f)
     - Tha fault occurred in faulty_write function within faulty module
     - The vfs_write function is also involved 
 
-4. **Cell Trace**
-    - The cell trace shows the sequency of function calls that lead to the error
+4. **Call Trace**
+    - The call trace shows the sequence of function calls that lead to the error
