@@ -68,10 +68,35 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = -ENOMEM;
+    if(filp == NULL) return -EINVAL;
+    if(buf == NULL) return -EINVAL;
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
     /**
      * TODO: handle write
      */
+    struct aesd_dev *dev = filp->private_data;
+    if(down_interruptible(&dev->sem))
+    {
+        return -ERESTARTSYS;
+    }
+
+    char *write_data = kmalloc(count, GFP_KERNEL);
+    if(write_data == NULL)
+    {
+        PDEBUG("kmalloc failed while writing data");
+        PDEBUG(KERN_ALERT "kmalloc failed while writing data");
+        return retval;
+    }
+
+    if(copy_from_user(write_data, buf, count))
+    {
+        retval = -EFAULT;
+        kfree(write_data);
+        return retval;
+    }
+
+
+
     printk(KERN_ALERT "File write\n");
     printk(KERN_ALERT "%s\n", buf);
     return retval;
