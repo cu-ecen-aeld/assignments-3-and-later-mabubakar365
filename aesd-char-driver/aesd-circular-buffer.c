@@ -43,16 +43,16 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         if(totalSize > char_offset)
         {
             uint16_t start_index = 0;
-            uint16_t lcal_index = char_offset - (totalSize - buffer->entry[index].size);
+            uint16_t local_index = char_offset - (totalSize - buffer->entry[index].size);
             
             ptr = buffer->entry[index].buffptr;
-            while(start_index != lcal_index) 
+            while(start_index != local_index) 
             {
                 start_index++;
                 ptr++;
             }
             
-            *entry_offset_byte_rtn  = lcal_index;
+            *entry_offset_byte_rtn  = local_index;
             return &buffer->entry[index];
         }
 

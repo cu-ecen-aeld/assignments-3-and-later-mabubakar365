@@ -21,7 +21,7 @@
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Muhammad Abu Bakar"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
@@ -32,6 +32,7 @@ int aesd_open(struct inode *inode, struct file *filp)
     /**
      * TODO: handle open
      */
+    printk(KERN_ALERT "File opened\n");
     return 0;
 }
 
@@ -41,6 +42,7 @@ int aesd_release(struct inode *inode, struct file *filp)
     /**
      * TODO: handle release
      */
+    printk(KERN_ALERT "File closed\n");
     return 0;
 }
 
@@ -52,6 +54,9 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     /**
      * TODO: handle read
      */
+    const char *dummy = "Hello this is dummy data";
+    printk(KERN_ALERT "File read\n");
+    printk(KERN_ALERT "%s\n", dummy);
     return retval;
 }
 
@@ -63,6 +68,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     /**
      * TODO: handle write
      */
+    printk(KERN_ALERT "File write\n");
+    printk(KERN_ALERT "%s\n", buf);
     return retval;
 }
 struct file_operations aesd_fops = {
