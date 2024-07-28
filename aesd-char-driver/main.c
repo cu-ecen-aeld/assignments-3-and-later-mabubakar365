@@ -274,7 +274,6 @@ void aesd_cleanup_module(void)
     /**
      * TODO: cleanup AESD specific poritions here as necessary
      */
-
     unregister_chrdev_region(devno, 1);
 }
 
