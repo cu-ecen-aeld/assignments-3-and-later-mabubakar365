@@ -37,7 +37,6 @@ int aesd_open(struct inode *inode, struct file *filp)
     struct aesd_dev *dev;
     dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
     filp->private_data = dev;
-    printk(KERN_ALERT "File opened\n");
     return 0;
 }
 
@@ -47,7 +46,6 @@ int aesd_release(struct inode *inode, struct file *filp)
     /**
      * TODO: handle release
      */
-    printk(KERN_ALERT "File closed\n");
     return 0;
 }
 
@@ -93,7 +91,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     }
 
     clean:
-        printk(KERN_ALERT "File read\n");
         return retval;
 }
 
@@ -195,7 +192,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
     clean:
         mutex_unlock(&dev->lock);
-        printk(KERN_ALERT "File write\n");
         return retval;
 }
 
