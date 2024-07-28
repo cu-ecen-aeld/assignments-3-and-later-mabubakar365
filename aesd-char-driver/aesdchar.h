@@ -8,6 +8,7 @@
 #ifndef AESD_CHAR_DRIVER_AESDCHAR_H_
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
 
+#define __KERNEL__ 1
 #include "aesd-circular-buffer.h"
 
 #define AESD_DEBUG 1  //Remove comment on this line to enable debug
