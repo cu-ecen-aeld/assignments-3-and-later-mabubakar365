@@ -22,6 +22,12 @@
 
 int sockfd;
 
+#ifndef USE_AESD_CHAR_DEVICE //change it later
+const char *filepath = "/var/tmp/aesdsocketdata";
+#else
+const char *filepath = "/dev/aesdchar";
+#endif
+
 #ifndef USE_AESD_CHAR_DEVICE // change it later
 FILE *file;
 #else
@@ -143,8 +149,10 @@ void *handle_client(void *ptr)
             // fflush(file);
             fseek(file, 0, SEEK_SET);
             #else
+            file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
             write(file, buffer, strlen(buffer));
             lseek(file, 0, SEEK_SET);
+            close(file);
             #endif
 
             size_t bufferSize = 1024; // or any other size you want
@@ -162,9 +170,11 @@ void *handle_client(void *ptr)
             }
             #else
             ssize_t bytesRead;
+            file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
             while ((bytesRead = read(file, writeBuf, bufferSize)) > 0) {
                 send(client_sockfd, writeBuf, bytesRead, 0);
             }
+            close(file);
             #endif
 
             free(writeBuf); // don't forget to free the memory when you're done with it
@@ -248,13 +258,17 @@ void signalInterruptHandler(int signo)
             abs(ptm.tm_gmtoff) / 3600,
             (abs(ptm.tm_gmtoff) % 3600) / 60);
 
+        file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         if (write(file, buffer, len) != len) {
             // Handle error
             perror("write");
         }
 
-        else lseek(file, 0, SEEK_SET);
-
+        else 
+        {
+            lseek(file, 0, SEEK_SET);
+            close(file);
+        }
         // fprintf(file, "timestamp:%s.%06ld %c%02d%02d\n", time_string, milliseconds, 
         //     (ptm.tm_gmtoff < 0) ? '-' : '+',
         //     abs(ptm.tm_gmtoff) / 3600,
@@ -270,12 +284,6 @@ int createTCPServer(int deamonize)
 {
     signal(SIGINT, signalInterruptHandler);
     signal(SIGTERM, signalInterruptHandler);
-
-    #ifndef USE_AESD_CHAR_DEVICE //change it later
-    const char *filepath = "/var/tmp/aesdsocketdata";
-    #else
-    const char *filepath = "/dev/aesdchar";
-    #endif
 
     #ifndef USE_AESD_CHAR_DEVICE // change it later
     file = fopen(filepath, "a+");
@@ -295,6 +303,7 @@ int createTCPServer(int deamonize)
         perror("Unable to open or create the file");
         return -1;
     }  
+    close(file);
     #endif
 
     openlog("aesdsocket.c", LOG_CONS | LOG_PID, LOG_USER);
