@@ -20,6 +20,8 @@
 #include<linux/kernel.h>
 #include <linux/slab.h>
 #include "aesdchar.h"
+#include "aesd_ioctl.h"
+
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
@@ -195,23 +197,76 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         return retval;
 }
 
+// loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
+// {
+//     struct aesd_dev *dev = filp->private_data;
+//     loff_t retval;
+
+//     if(mutex_lock_interruptible(&dev->lock))
+//     {
+//         PDEBUG("Error in Mutex locking");
+//         retval = -ERESTARTSYS;
+//         goto clean;
+//     }
+
+//     retval = fixed_size_llseek(filp, off, whence, dev->buffer_size);
+
+//     clean:
+//         mutex_unlock(&dev->lock);
+//         return retval;
+// }
+
 loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
 {
     struct aesd_dev *dev = filp->private_data;
-    loff_t retval;
+    loff_t newpos;
 
-    if(mutex_lock_interruptible(&dev->lock))
+    switch(whence)
     {
-        PDEBUG("Error in Mutex locking");
-        retval = -ERESTARTSYS;
-        goto clean;
+        /* SEEK_SET */
+        case 0:
+            newpos = off;
+            break;
+        /* SEEK_CUR*/    
+        case 1:
+            newpos = filp->f_pos + off;
+            break;
+        /* SEEK_END */    
+        case 2:
+            newpos = dev->buffer_size + off;
+            break;
+        default:
+            return -EINVAL;
     }
 
-    retval = fixed_size_llseek(filp, off, whence, dev->buffer_size);
+    if(newpos < 0) return -EINVAL;
+    filp->f_pos = newpos;
+    return newpos;
+}
 
-    clean:
-        mutex_unlock(&dev->lock);
-        return retval;
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+    struct aesd_seekto seekto;
+    if(_IOC_TYPE(cmd) != AESD_IOC_MAGIC) return -ENOTTY;
+    if(_IOC_NR(cmd) != AESDCHAR_IOC_MAXNR) return -ENOTTY;
+
+    switch(cmd)
+    {
+        case AESDCHAR_IOCSEEKTO:
+            if(copy_from_user(&seekto, (struct aesd_seekto __user *)arg, sizeof(seekto)))
+            {
+                return -EFAULT;
+            }
+
+            printk(KERN_INFO "Write command: %d", seekto.write_cmd);
+            printk(KERN_INFO "Write command: %d", seekto.write_cmd_offset);
+            break;
+
+        default:
+            return -ENOTTY;
+    }
+
+    return 0;
 }
 
 struct file_operations aesd_fops = {
@@ -220,7 +275,8 @@ struct file_operations aesd_fops = {
     .write =    aesd_write,
     .open =     aesd_open,
     .release =  aesd_release,
-    .llseek = aesd_llseek
+    .llseek = aesd_llseek,
+    .unlocked_ioctl = aesd_ioctl
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
