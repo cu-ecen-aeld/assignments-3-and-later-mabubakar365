@@ -78,7 +78,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
             count = available_bytes;
         }
 
-        if(copy_to_user(buf, entry->buffptr, count))
+        if(copy_to_user(buf, entry->buffptr + entry_offset, count))
         {
             retval = -EFAULT;
             PDEBUG("Error in copy to user function");
@@ -197,51 +197,27 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         return retval;
 }
 
-// loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
-// {
-//     struct aesd_dev *dev = filp->private_data;
-//     loff_t retval;
-
-//     if(mutex_lock_interruptible(&dev->lock))
-//     {
-//         PDEBUG("Error in Mutex locking");
-//         retval = -ERESTARTSYS;
-//         goto clean;
-//     }
-
-//     retval = fixed_size_llseek(filp, off, whence, dev->buffer_size);
-
-//     clean:
-//         mutex_unlock(&dev->lock);
-//         return retval;
-// }
-
 loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
 {
     struct aesd_dev *dev = filp->private_data;
-    loff_t newpos;
+    loff_t retval;
+    size_t buffsize = 0;
 
-    switch(whence)
+    if(mutex_lock_interruptible(&dev->lock))
     {
-        /* SEEK_SET */
-        case 0:
-            newpos = off;
-            break;
-        /* SEEK_CUR*/    
-        case 1:
-            newpos = filp->f_pos + off;
-            break;
-        /* SEEK_END */    
-        case 2:
-            newpos = dev->buffer_size + off;
-            break;
-        default:
-            return -EINVAL;
+        PDEBUG("Error in Mutex locking");
+        retval = -ERESTARTSYS;
+        goto clean;
     }
 
-    if(newpos < 0) return -EINVAL;
-    filp->f_pos = newpos;
-    return newpos;
+    // printk(KERN_INFO "dev->buffer_size : %d\n", dev->buffer_size);
+    // buffsize = aesd_circular_buffer_size(&dev->circular_buffer);
+    printk(KERN_INFO "buffsize: %d\n", buffsize);
+    retval = fixed_size_llseek(filp, off, whence, dev->buffer_size);
+
+    clean:
+        mutex_unlock(&dev->lock);
+        return retval;
 }
 
 long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -258,8 +234,12 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                 return -EFAULT;
             }
 
-            printk(KERN_INFO "Write command: %d", seekto.write_cmd);
-            printk(KERN_INFO "Write command: %d", seekto.write_cmd_offset);
+            else
+            {
+                printk(KERN_INFO "Write command: %d", seekto.write_cmd);
+                printk(KERN_INFO "Write command: %d", seekto.write_cmd_offset);
+            }
+
             break;
 
         default:
@@ -311,6 +291,10 @@ int aesd_init_module(void)
     /**
      * TODO: initialize the AESD specific portion of the device
      */
+    aesd_circular_buffer_init(&aesd_device.circular_buffer);
+    aesd_device.entry_cache.buffptr = NULL;
+    aesd_device.entry_cache.size = 0;
+    mutex_init(&aesd_device.lock);
 
     result = aesd_setup_cdev(&aesd_device);
 
@@ -330,6 +314,15 @@ void aesd_cleanup_module(void)
     /**
      * TODO: cleanup AESD specific poritions here as necessary
      */
+    struct aesd_buffer_entry *entry;
+    uint8_t index;
+
+    AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.circular_buffer, index)
+    {
+        kfree(entry->buffptr);
+    }
+    mutex_destroy(&aesd_device.lock);
+
     unregister_chrdev_region(devno, 1);
 }
 
