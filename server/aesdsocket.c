@@ -95,10 +95,10 @@ void *handle_client(void *ptr)
     struct aesd_seekto seekto;
     const char *pattern = "AESDCHAR_IOCSEEKTO:";
     uint32_t X, Y;
-    // bool isPatternFound = 0;
+    bool needToReopen = 0;
 
-    while(1)
-    {
+    // while(1)
+    // {
         int connection_closed = 0;
         int received_error = 0;
         bool isNewLineFound = 0;
@@ -113,6 +113,7 @@ void *handle_client(void *ptr)
 
         memset(buffer, 0, 1024 * sizeof(char));
         file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        printf("File opened for write\n");
 
         while(!isNewLineFound)
         {
@@ -136,12 +137,15 @@ void *handle_client(void *ptr)
             {
                 free(buffer);
                 buffer = NULL;
-                // num_bytes = 0;  // Reset num_bytes to 0
+                needToReopen = 0;
+                printf("File closed due to receive error\n");
+                close(file);
                 break;
             }    
 
             else
             {
+                printf("Data Received\n");
                 char * match = strstr(buffer, pattern);
                 if(match)
                 {
@@ -150,6 +154,8 @@ void *handle_client(void *ptr)
                         seekto.write_cmd = X;
                         seekto.write_cmd_offset = Y;
                         ioctl(file, AESDCHAR_IOCSEEKTO, &seekto);
+                        printf("IOCTL Issued\n");
+                        needToReopen = 0;
                         break;
                     }
                 }
@@ -159,6 +165,10 @@ void *handle_client(void *ptr)
                 {
                     isNewLineFound = 1;
                     lseek(file, 0, SEEK_SET);
+                    needToReopen = 1;
+                    printf("Data written\n");
+                    close(file);
+                    printf("File closed after write\n");
                 }
                 else
                 {
@@ -190,10 +200,16 @@ void *handle_client(void *ptr)
         }
         #else
         ssize_t bytesRead;
-        // file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        if(needToReopen) 
+        {
+            file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            printf("File opened for read\n");
+        }
         while ((bytesRead = read(file, writeBuf, bufferSize)) > 0) {
             send(client_sockfd, writeBuf, bytesRead, 0);
+            printf("Data Read\n");
         }
+        printf("File closed after read\n");
         close(file);
         #endif
 
@@ -204,7 +220,7 @@ void *handle_client(void *ptr)
         free(buffer);
         buffer = NULL;
         // num_bytes = 0;  // Reset num_bytes to 0
-    }
+    // }
 
     syslog(LOG_INFO, "Closed connection from %s", client_ip);
     close(client_sockfd);  
