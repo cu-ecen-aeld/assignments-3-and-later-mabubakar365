@@ -113,7 +113,7 @@ void *handle_client(void *ptr)
 
         memset(buffer, 0, 1024 * sizeof(char));
         file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        printf("File opened for write\n");
+        // printf("File opened for write\n");
 
         while(!isNewLineFound)
         {
@@ -138,14 +138,14 @@ void *handle_client(void *ptr)
                 free(buffer);
                 buffer = NULL;
                 needToReopen = 0;
-                printf("File closed due to receive error\n");
+                // printf("File closed due to receive error\n");
                 close(file);
                 break;
             }    
 
             else
             {
-                printf("Data Received\n");
+                // printf("Data Received\n");
                 char * match = strstr(buffer, pattern);
                 if(match)
                 {
@@ -154,7 +154,7 @@ void *handle_client(void *ptr)
                         seekto.write_cmd = X;
                         seekto.write_cmd_offset = Y;
                         ioctl(file, AESDCHAR_IOCSEEKTO, &seekto);
-                        printf("IOCTL Issued\n");
+                        // printf("IOCTL Issued\n");
                         needToReopen = 0;
                         break;
                     }
@@ -166,9 +166,9 @@ void *handle_client(void *ptr)
                     isNewLineFound = 1;
                     lseek(file, 0, SEEK_SET);
                     needToReopen = 1;
-                    printf("Data written\n");
+                    // printf("Data written\n");
                     close(file);
-                    printf("File closed after write\n");
+                    // printf("File closed after write\n");
                 }
                 else
                 {
@@ -188,7 +188,7 @@ void *handle_client(void *ptr)
         size_t bufferSize = 1024; // or any other size you want
         char* writeBuf = malloc(bufferSize * sizeof(char));
         if(writeBuf == NULL) {
-            perror("Unable to allocate memory for writeBuf");
+            // perror("Unable to allocate memory for writeBuf");
             pthread_mutex_unlock(&file_mutex);
             return NULL;
         }
@@ -203,11 +203,11 @@ void *handle_client(void *ptr)
         if(needToReopen) 
         {
             file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-            printf("File opened for read\n");
+            // printf("File opened for read\n");
         }
         while ((bytesRead = read(file, writeBuf, bufferSize)) > 0) {
             send(client_sockfd, writeBuf, bytesRead, 0);
-            printf("Data Read\n");
+            // printf("Data Read\n");
         }
         printf("File closed after read\n");
         close(file);
