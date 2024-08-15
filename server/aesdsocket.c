@@ -209,7 +209,7 @@ void *handle_client(void *ptr)
             send(client_sockfd, writeBuf, bytesRead, 0);
             // printf("Data Read\n");
         }
-        printf("File closed after read\n");
+        // printf("File closed after read\n");
         close(file);
         #endif
 
