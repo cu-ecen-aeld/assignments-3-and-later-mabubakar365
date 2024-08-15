@@ -12,9 +12,28 @@
 #include<pthread.h>
 #include<time.h>
 #include<sys/time.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
+
+
+#define USE_AESD_CHAR_DEVICE 1
+
+#ifdef USE_AESD_CHAR_DEVICE
+#include<fcntl.h>
+#endif
 
 int sockfd;
+
+#ifndef USE_AESD_CHAR_DEVICE //change it later
+const char *filepath = "/var/tmp/aesdsocketdata";
+#else
+const char *filepath = "/dev/aesdchar";
+#endif
+
+#ifndef USE_AESD_CHAR_DEVICE // change it later
 FILE *file;
+#else
+int file;
+#endif
 
 pthread_mutex_t file_mutex;
 
@@ -73,6 +92,10 @@ void *handle_client(void *ptr)
     char *buffer = NULL;
     ssize_t num_bytes = 0;
     ssize_t recv_bytes = 0;
+    // struct aesd_seekto seekto;
+    // const char *pattern = "AESDCHAR_IOCSEEKTO:";
+    // uint32_t X, Y;
+    // bool isPatternFound = 0;
 
     while(1)
     {
@@ -108,7 +131,31 @@ void *handle_client(void *ptr)
 
             num_bytes += recv_bytes;
         } while (!memchr(buffer + num_bytes - recv_bytes, '\n', recv_bytes));
-            // while (!strchr(buffer, '\n'));   
+
+        // char *match = strstr(buffer, pattern);
+        // if(match)
+        // {
+        //     if(sscanf(match, "AESDCHAR_IOCSEEKTO:%u,%u", &X, &Y) == 2)
+        //     {
+        //         syslog(LOG_INFO, "Pattern found: X = %u, Y = %u", X, Y);
+        //         size_t patternLen = strlen(pattern);
+        //         char *after_pattern = match + patternLen + snprintf(NULL, 0, "%u,%u", X, Y);
+        //         memmove(match, after_pattern, num_bytes - (after_pattern - buffer));
+        //         num_bytes -= (after_pattern - match);
+        //         isPatternFound = 1;
+        //     }
+        //     else
+        //     {
+        //         syslog(LOG_ERR, "Pattern found but extraction failed");
+        //         isPatternFound = 0;
+        //     }
+        // }
+
+        // else
+        // {
+        //     syslog(LOG_ERR, "Error not found");
+        //     isPatternFound = 0;
+        // }
 
         if(received_error == 1 || connection_closed == 1) 
         {
@@ -126,9 +173,23 @@ void *handle_client(void *ptr)
             // printf("%s", buffer);
 
             pthread_mutex_lock(&file_mutex);
+            #ifndef USE_AESD_CHAR_DEVICE // change it later
             fputs(buffer, file);
-            fflush(file);
+            // fflush(file);
             fseek(file, 0, SEEK_SET);
+            #else
+            file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            // if(isPatternFound)
+            // {
+            //     seekto.write_cmd = X;
+            //     seekto.write_cmd_offset = Y;
+            //     ioctl(file, AESDCHAR_IOCSEEKTO, &seekto);
+            // }
+
+            write(file, buffer, strlen(buffer));
+            lseek(file, 0, SEEK_SET);
+            close(file);
+            #endif
 
             size_t bufferSize = 1024; // or any other size you want
             char* writeBuf = malloc(bufferSize * sizeof(char));
@@ -138,10 +199,19 @@ void *handle_client(void *ptr)
                 return NULL;
             }
 
+            #ifndef USE_AESD_CHAR_DEVICE // change it later
             while(fgets(writeBuf, bufferSize, file) != NULL)
             {
                 send(client_sockfd, writeBuf, strlen(writeBuf), 0);
             }
+            #else
+            ssize_t bytesRead;
+            file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            while ((bytesRead = read(file, writeBuf, bufferSize)) > 0) {
+                send(client_sockfd, writeBuf, bytesRead, 0);
+            }
+            close(file);
+            #endif
 
             free(writeBuf); // don't forget to free the memory when you're done with it
             
@@ -163,6 +233,7 @@ void signalInterruptHandler(int signo)
 {
     if((signo == SIGTERM) || (signo == SIGINT))
     {
+        #ifndef USE_AESD_CHAR_DEVICE // change it later
         int Status;
 
         Status = remove("/var/tmp/aesdsocketdata");
@@ -175,11 +246,16 @@ void signalInterruptHandler(int signo)
         {
             printf("Unable to delete file at path /var/tmp/aesdsocket\n");
         }
+        #endif
 
         printf("Gracefully handling SIGTERM\n");
         syslog(LOG_INFO,  "Caught signal, exiting");
         close(sockfd);
+        #ifndef USE_AESD_CHAR_DEVICE //change it later
         fclose(file);
+        #else
+        close(file);
+        #endif
         pthread_mutex_destroy(&file_mutex);
         closelog();
         exit(EXIT_SUCCESS);
@@ -187,6 +263,7 @@ void signalInterruptHandler(int signo)
 
     if(signo == SIGALRM)
     {
+        #ifndef USE_AESD_CHAR_DEVICE // change it later
         struct timeval tv;
         struct tm ptm;
         char time_string[40];
@@ -210,13 +287,32 @@ void signalInterruptHandler(int signo)
             (abs(ptm.tm_gmtoff) % 3600) / 60);
 
         pthread_mutex_lock(&file_mutex);
-        fprintf(file, "timestamp:%s.%06ld %c%02d%02d\n", time_string, milliseconds, 
+
+        char buffer[1024];
+        int len = snprintf(buffer, sizeof(buffer), "timestamp:%s.%06ld %c%02d%02d\n", time_string, milliseconds, 
             (ptm.tm_gmtoff < 0) ? '-' : '+',
             abs(ptm.tm_gmtoff) / 3600,
             (abs(ptm.tm_gmtoff) % 3600) / 60);
-        fflush(file);   
-        fseek(file, 0, SEEK_SET);
+
+        file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        if (write(file, buffer, len) != len) {
+            // Handle error
+            perror("write");
+        }
+
+        else 
+        {
+            lseek(file, 0, SEEK_SET);
+            close(file);
+        }
+        // fprintf(file, "timestamp:%s.%06ld %c%02d%02d\n", time_string, milliseconds, 
+        //     (ptm.tm_gmtoff < 0) ? '-' : '+',
+        //     abs(ptm.tm_gmtoff) / 3600,
+        //     (abs(ptm.tm_gmtoff) % 3600) / 60);
+        // // fflush(file);   
+        // fseek(file, 0, SEEK_SET);
         pthread_mutex_unlock(&file_mutex);
+        #endif
     }
 }
 
@@ -225,14 +321,26 @@ int createTCPServer(int deamonize)
     signal(SIGINT, signalInterruptHandler);
     signal(SIGTERM, signalInterruptHandler);
 
-    const char *filepath = "/var/tmp/aesdsocketdata";
-
+    #ifndef USE_AESD_CHAR_DEVICE // change it later
     file = fopen(filepath, "a+");
+    #else
+    file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    #endif
+
+    #ifndef USE_AESD_CHAR_DEVICE // change it later
     if(file == NULL)
     {
         perror("Unable to open or create the file");
         return -1;
-    }
+    }  
+    #else
+    if(file < 0)
+    {
+        perror("Unable to open or create the file");
+        return -1;
+    }  
+    close(file);
+    #endif
 
     openlog("aesdsocket.c", LOG_CONS | LOG_PID, LOG_USER);
 
@@ -241,7 +349,11 @@ int createTCPServer(int deamonize)
     {
         syslog(LOG_ERR, "Unable to create TCP Socket");
         perror("Unable to create TCP Socket\n");
+        #ifndef USE_AESD_CHAR_DEVICE // change it later
         fclose(file);
+        #else
+        close(file);
+        #endif
         closelog();
         return -1;
     }
@@ -263,7 +375,11 @@ int createTCPServer(int deamonize)
         syslog(LOG_ERR, "TCP Socket bind failure");
         perror("TCP Socket bind failure\n");
         close(sockfd);
+        #ifndef USE_AESD_CHAR_DEVICE // change it later
         fclose(file);
+        #else
+        close(file);
+        #endif
         closelog();        
         return -1;
     }
@@ -273,7 +389,11 @@ int createTCPServer(int deamonize)
         syslog(LOG_ERR, "Unable to listen at created TCP socket");
         perror("Unable to listen at created TCP socket\n");
         close(sockfd);
+        #ifndef USE_AESD_CHAR_DEVICE // change it later
         fclose(file);
+        #else
+        close(file);
+        #endif
         closelog();        
         return -1;
     }
@@ -286,7 +406,11 @@ int createTCPServer(int deamonize)
             {
                 printf("failed to fork\n"); 
                 close(sockfd);
+                #ifndef USE_AESD_CHAR_DEVICE // change it later
                 fclose(file);
+                #else
+                close(file);
+                #endif
                 closelog();  
                 exit(EXIT_FAILURE);      
             }   
@@ -303,7 +427,11 @@ int createTCPServer(int deamonize)
             {
                 printf("Failed to create SID for child\n");
                 close(sockfd);
+                #ifndef USE_AESD_CHAR_DEVICE // change it later
                 fclose(file);
+                #else
+                close(file);
+                #endif
                 closelog(); 
                 exit(EXIT_FAILURE);
             }
@@ -312,7 +440,11 @@ int createTCPServer(int deamonize)
             {
                 printf("Unable to change directory to root\n");
                 close(sockfd);
+                #ifndef USE_AESD_CHAR_DEVICE // change it later
                 fclose(file);
+                #else
+                close(file);
+                #endif
                 closelog(); 
                 exit(EXIT_FAILURE);
             }
@@ -340,8 +472,11 @@ int createTCPServer(int deamonize)
         {
             syslog(LOG_ERR, "Unable to accept the client's connection");
             perror("Unable to accept the client's connection\n");
-            close(sockfd);
+            #ifndef USE_AESD_CHAR_DEVICE // change it later
             fclose(file);
+            #else
+            close(file);
+            #endif
             closelog();            
             return -1;
         }      
@@ -403,7 +538,11 @@ int createTCPServer(int deamonize)
     }
 
     close(sockfd);
+    #ifndef USE_AESD_CHAR_DEVICE // change it later
     fclose(file);
+    #else
+    close(file);
+    #endif
     closelog();               
     return 0; 
 }

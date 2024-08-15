@@ -12,6 +12,7 @@
 #include<pthread.h>
 #include<time.h>
 #include<sys/time.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 
 #define USE_AESD_CHAR_DEVICE 1
@@ -89,103 +90,120 @@ void *handle_client(void *ptr)
     syslog(LOG_INFO, "Accepted connection from %s", client_ip);
 
     char *buffer = NULL;
-    ssize_t num_bytes = 0;
+    // ssize_t num_bytes = 0;
     ssize_t recv_bytes = 0;
+    struct aesd_seekto seekto;
+    const char *pattern = "AESDCHAR_IOCSEEKTO:";
+    uint32_t X, Y;
+    // bool isPatternFound = 0;
 
     while(1)
     {
         int connection_closed = 0;
         int received_error = 0;
+        bool isNewLineFound = 0;
 
-        do {
-            buffer = realloc(buffer, num_bytes + 1024);
-            if (!buffer) {
-                syslog(LOG_INFO, "Unable to allocate space on heap");
-                printf("Unable to allocate space on heap\n");
-                close(sockfd);
-                return NULL;
-            }
+        buffer = malloc(1024 * sizeof(char));
+        if (!buffer) {
+            syslog(LOG_INFO, "Unable to allocate space on heap");
+            printf("Unable to allocate space on heap\n");
+            close(sockfd);
+            return NULL;
+        }
 
-            recv_bytes = recv(client_sockfd, buffer + num_bytes, 1024, 0);
+        memset(buffer, 0, 1024 * sizeof(char));
+        file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+        while(!isNewLineFound)
+        {
+            recv_bytes = recv(client_sockfd, buffer, 1024, 0);
 
             if(recv_bytes == 0)
-                {
-                    syslog(LOG_INFO, "Closed connection from %s", client_ip);
-                    // printf("Closed connection from %s\n", client_ip);
-                    connection_closed = 1;
-                    break;
-                }
-
-            else if(recv_bytes < 0)
-                {
-                    syslog(LOG_ERR, "Received error");
-                    perror("Received error\n");
-                    received_error = 1;
-                    break;
-                }
-
-            num_bytes += recv_bytes;
-        } while (!memchr(buffer + num_bytes - recv_bytes, '\n', recv_bytes));
-            // while (!strchr(buffer, '\n'));   
-
-        if(received_error == 1 || connection_closed == 1) 
-        {
-            free(buffer);
-            buffer = NULL;
-            num_bytes = 0;  // Reset num_bytes to 0
-            break;
-        }
-
-        else
-        {
-            buffer[num_bytes] = '\0';
-
-            // printf("Packet Received %s\n", buffer);
-            // printf("%s", buffer);
-
-            pthread_mutex_lock(&file_mutex);
-            #ifndef USE_AESD_CHAR_DEVICE // change it later
-            fputs(buffer, file);
-            // fflush(file);
-            fseek(file, 0, SEEK_SET);
-            #else
-            file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-            write(file, buffer, strlen(buffer));
-            lseek(file, 0, SEEK_SET);
-            close(file);
-            #endif
-
-            size_t bufferSize = 1024; // or any other size you want
-            char* writeBuf = malloc(bufferSize * sizeof(char));
-            if(writeBuf == NULL) {
-                perror("Unable to allocate memory for writeBuf");
-                pthread_mutex_unlock(&file_mutex);
-                return NULL;
-            }
-
-            #ifndef USE_AESD_CHAR_DEVICE // change it later
-            while(fgets(writeBuf, bufferSize, file) != NULL)
             {
-                send(client_sockfd, writeBuf, strlen(writeBuf), 0);
+                syslog(LOG_INFO, "Closed connection from %s", client_ip);
+                // printf("Closed connection from %s\n", client_ip);
+                connection_closed = 1;
             }
-            #else
-            ssize_t bytesRead;
-            file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-            while ((bytesRead = read(file, writeBuf, bufferSize)) > 0) {
-                send(client_sockfd, writeBuf, bytesRead, 0);
+            else if(recv_bytes < 0)
+            {
+                syslog(LOG_ERR, "Received error");
+                perror("Received error\n");
+                received_error = 1;
             }
-            close(file);
-            #endif
 
-            free(writeBuf); // don't forget to free the memory when you're done with it
             
-            pthread_mutex_unlock(&file_mutex);
+            else if(received_error == 1 || connection_closed == 1) 
+            {
+                free(buffer);
+                buffer = NULL;
+                // num_bytes = 0;  // Reset num_bytes to 0
+                break;
+            }    
 
-            free(buffer);
-            buffer = NULL;
-            num_bytes = 0;  // Reset num_bytes to 0
+            else
+            {
+                char * match = strstr(buffer, pattern);
+                if(match)
+                {
+                    if(sscanf(match, "AESDCHAR_IOCSEEKTO:%u,%u", &X, &Y) == 2)
+                    {
+                        seekto.write_cmd = X;
+                        seekto.write_cmd_offset = Y;
+                        ioctl(file, AESDCHAR_IOCSEEKTO, &seekto);
+                        break;
+                    }
+                }
+
+                write(file, buffer, recv_bytes);
+                if(memchr(buffer, '\n', 1024*sizeof(char)) != NULL)
+                {
+                    isNewLineFound = 1;
+                    lseek(file, 0, SEEK_SET);
+                }
+                else
+                {
+                    memset(buffer, 0, 1024*sizeof(char));
+                }
+            }
         }
 
+        pthread_mutex_lock(&file_mutex);
+        #ifndef USE_AESD_CHAR_DEVICE // change it later
+        fputs(buffer, file);
+        // fflush(file);
+        fseek(file, 0, SEEK_SET);
+        #else
+        #endif
+
+        size_t bufferSize = 1024; // or any other size you want
+        char* writeBuf = malloc(bufferSize * sizeof(char));
+        if(writeBuf == NULL) {
+            perror("Unable to allocate memory for writeBuf");
+            pthread_mutex_unlock(&file_mutex);
+            return NULL;
+        }
+
+        #ifndef USE_AESD_CHAR_DEVICE // change it later
+        while(fgets(writeBuf, bufferSize, file) != NULL)
+        {
+            send(client_sockfd, writeBuf, strlen(writeBuf), 0);
+        }
+        #else
+        ssize_t bytesRead;
+        // file = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        while ((bytesRead = read(file, writeBuf, bufferSize)) > 0) {
+            send(client_sockfd, writeBuf, bytesRead, 0);
+        }
+        close(file);
+        #endif
+
+        free(writeBuf); // don't forget to free the memory when you're done with it
+        
+        pthread_mutex_unlock(&file_mutex);
+
+        free(buffer);
+        buffer = NULL;
+        // num_bytes = 0;  // Reset num_bytes to 0
     }
 
     syslog(LOG_INFO, "Closed connection from %s", client_ip);
